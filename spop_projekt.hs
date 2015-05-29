@@ -1,4 +1,4 @@
-module Nonogram where
+
 import Control.Exception
 import System.IO
 import System.IO.Error
@@ -15,7 +15,7 @@ readData = catch (do fname <- getLine
                      hClose handle
                      return (rows, cols)
                   ) errorHandler
-                      where errorHandler e = if isDoesNotExistError e 
+                      where errorHandler e = if isDoesNotExistError e
                             then do putStrLn ("Nie istnieje plik o podanej nazwie")
                                     ioError e
                             else ioError e
@@ -23,20 +23,63 @@ readData = catch (do fname <- getLine
 
 -- SOLVE NONOGRAM
 
-findLines :: [Int] -> Int -> [[Bool]]
-findLines [] _ = []
-findLines list n = []--findShortLines [] list n
-
--- 1 ([Bool]) - line beginning
--- 2 ([Int]) - uzupelnienie
--- 3 (Int) - ile miejsca na uzupelnienie
-findShortLines :: [Bool] -> [Int] -> Int -> (Maybe [[Bool]])
-findShortLines bs [] _ = Just [bs]
-findShortLines _ _ 0 = Nothing
-findShortLines bs list n = Nothing --TODO
-
 solvePuzzle :: ([[Int]], [[Int]]) -> [[Bool]]
 solvePuzzle x = [[False, True], [True, False]]
+
+data Cell = Empty | Black | White | Unknown
+                deriving Show
+
+
+solvePuzzle2 (rows, cols) = let table = createTable length(cols)  length(rows)
+
+
+
+createTable Int-> Int-> [[Cell]]
+createTable colN rowN = [ [Empty | x<-[1...colN]] | xs <-[1..rowN] ]
+createRow colN = [Empty | x<-[1...colN]]
+
+solve:: ([[Cell]], [Int], [[Int]])
+
+solveRows:: ([[Cell]], [Int], [[Int]], [[Int]]) -> [[Cell]]
+solveRows (game, rows, rowsGr, colsGr)
+
+solveCols:: ([[Cell]], [Int], [[Int]], [[Int]])
+solveCols (game, cols, rowsGr, colsGr)
+
+trySolveRow :: ([Cell], [Int]) -> ([Cell], [Int])
+
+trySolveRow  (game, []) = (game, [])
+trySolveRow  (game, rowGr) = let refRow = createRow (length game)
+                                 firstSov = genFirst rowGr
+                                 refRow2 = trySolveRow2 (game, rowGr, refRow, firstSov)
+                             in  (refRow2 , diff refRow2 game)
+
+
+genFirst::[Int] -> [Int]
+genFirst list = 1:(genFirst2 1 list)
+genFirst2 (idx, x:xs) = let new = (idx + x + 1)
+                        in new:(genFirst2 new xs)
+
+trySolveRow2 :: ([Cell], [Int], [Cell], Maybe [Int]) -> ([Cell]
+trySolveRow2  (game, rowGr, refRow, Nothing) = sum game refRow
+trySolveRow2  (game, rowGr, refRow, curSol) =
+                if isPossible game curSol then
+                    let newRefRow = andRow (refRow, curSol)
+                        newCurSol = genNextSol curSol rowGr
+                    in trySolveRow2  (game, rowGr, newRefRow, newCurSol)
+                else
+                    let newCurSol = genNextSol curSol rowGr
+                    in trySolveRow2  (game, rowGr, refRow, newCurSol)
+
+genNextSol curSol rowGr rowSize =  if (last curSol) + (last rowGr) > rowSize then
+                                          genNextSol2 (take ((length curSol) - 1 ) curSol) rowGr rowSize
+
+genNextSol2 curSol rowGr rowSize =
+
+trySolveCol :: ([Cell], Int, [Int]) -> ([[Cell]], [Int])
+trySolveCol =
+
+
 
 -- DRAW RESULT PICTURE
 
@@ -98,24 +141,3 @@ main = catch (do putStr "Podaj nazwe pliku: "
                          if isDoesNotExistError e
                              then putStrLn ("Nie istnieje ")
                          else return ()
---           where errorHandler :: SomeException -> IO()
---                 errorHandler err = putStrLn $ "Caught exception: " ++ show err
-
-{-
-main = do putStr "Podaj nazwe pliku: "
-          puzzle <- readData
-          putStrLn "\nWiersze:"
-          print (fst puzzle)
-          putStrLn "\nKolumny:"
-          print (snd puzzle)
-          let solution = solvePuzzle puzzle
-          putStrLn "\nRozwiazanie:"
-          drawPicture solution (length (snd puzzle))
-          return ()
--}
-{-
-xxxx = catch (print $ 5 `div` 0) handler
-  where
-    handler :: SomeException -> IO ()
-    handler ex = putStrLn $ "Caught exception: " ++ show ex
-    -}
