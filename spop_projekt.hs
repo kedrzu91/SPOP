@@ -14,25 +14,38 @@ createTable colN rowN = [ (createRow colN) | xs <-[1..rowN] ]
 createRow colN = [Empty | x<-[1..colN]]
 
 solvePuzzle :: ([[Int]], [[Int]]) -> [[Bool]]
-
-
 solvePuzzle x = convertGame (solvePuzzle2 x)
 
--- ta funkcja jest do uzupełnienia - trzeba dopisać żeby iterować na zmianę po kolumnach i wierszach
--- oraz wykorzystaćwyjście z funkcji trySolveRow : pierwszy element krotki to rozwiązany wiersz,
---  drugi to zmienione kolumny w wiersz
 solvePuzzle2 :: ([[Int]], [[Int]]) -> [[Cell]]
 solvePuzzle2 (rows, cols) = let game = createTable (length cols) (length rows)
-                                (solution, transponed) = solveGame game rows cols [0..((length rows) - 1)] False
+                                (solution, transponed) = solveGame game rows cols [True | x<-[1..(length rows)]] False
                             in if(transponed) then transpose solution
                                else solution
 
-solveGame :: [[Cell]] -> [[Int]] -> [[Int]] -> [Int] -> Bool -> ([[Cell]], Bool)
+-- przyjmowane argumenty:
+-- obecne rozwiązanie, dane wierszy, dane kolumn, informacja które kolumny zostały zmienione, informacja czy obrazek jest obrócony
+solveGame :: [[Cell]] -> [[Int]] -> [[Int]] -> [Bool] -> Bool -> ([[Cell]], Bool)
 solveGame game _ _ [] transponed = (game, transponed)
 solveGame game rows cols changedRows transponed =
-	let solRows = solveGameByRow game rows
-	    trGame = transpose solRows
-	in solveGame trGame cols rows (findChangedCols game solRows) (not transponed)
+    if((elemIndex True changedRows) == Nothing) then (game, transponed)
+    else
+        let analyzedRows = getElem rows changedRows
+            analyzedGame = getElem game changedRows
+            solution = solveGameByRow analyzedGame analyzedRows
+            solRows = merge solution game changedRows
+            trGame = transpose solRows
+        in solveGame trGame cols rows (findChangedCols analyzedGame solution) (not transponed)
+
+getElem :: [[a]] -> [Bool] -> [[a]]
+getElem _ [] = []
+getElem [] _ = []
+getElem (elem:elems) (idx:idxs) = if(idx == True) then elem:(getElem elems idxs)
+    else getElem elems idxs
+
+merge [] game _ = game
+merge (sol:sols) (game:games) (change:changes) =
+    if (change == True) then sol:(merge sols games changes)
+    else game:(merge (sol:sols) games changes)
 
 solveGameByRow:: [[Cell]]->[[Int]]->[[Cell]]
 solveGameByRow game rows = zipWith (\x y -> trySolveRow x y) game rows
@@ -50,8 +63,8 @@ trySolveRow game rowGr = let refRow = createRow (length game)
                              in newRow
 
 -- porównanie dwóch tablic [[Cell]], wynik - indeksy zmienionych kolumn
-findChangedCols :: [[Cell]] -> [[Cell]] -> [Int]
-findChangedCols game1 game2 = getChangedIdx (diffGames game1 game2)
+findChangedCols :: [[Cell]] -> [[Cell]] -> [Bool]
+findChangedCols game1 game2 = sumDiffGameCols (diffGames game1 game2)
 
 diffGames :: [[Cell]] -> [[Cell]] -> [[Bool]]
 diffGames [] _ = []
@@ -61,10 +74,6 @@ diffGames (g1:gs1) (g2:gs2) = (diff g1 g2):(diffGames gs1 gs2)
 diff _ [] = []
 diff [] _ = []
 diff (x:xs) (y:ys) = (x /= y):(diff xs ys)
-
-getChangedIdx :: [[Bool]] -> [Int]
-getChangedIdx [] = []
-getChangedIdx diffGame = elemIndices True (sumDiffGameCols diffGame)
 
 sumDiffGameCols :: [[Bool]] -> [Bool]
 sumDiffGameCols [] = []
