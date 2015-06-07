@@ -23,22 +23,19 @@ solvePuzzle x = convertGame (solvePuzzle2 x)
 --  drugi to zmienione kolumny w wiersz
 solvePuzzle2 :: ([[Int]], [[Int]]) -> [[Cell]]
 solvePuzzle2 (rows, cols) = let game = createTable (length cols) (length rows)
-                                solRows = solveGameByRow game rows
-                                trGame = transpose solRows
+                                (solution, transponed) = solveGame game rows cols [0..((length rows) - 1)] False
+                            in if(transponed) then transpose solution
+                               else solution
 
-                                solCols = solveGameByRow trGame cols
-                                trGame2 = transpose solCols
-
-                                solRows2 = solveGameByRow trGame2 rows
-                                trGame3 = transpose solRows2
-
-                                solCols2 = solveGameByRow trGame3 cols
-                                trGame4 = transpose solCols2
-
-                                in trGame4
+solveGame :: [[Cell]] -> [[Int]] -> [[Int]] -> [Int] -> Bool -> ([[Cell]], Bool)
+solveGame game _ _ [] transponed = (game, transponed)
+solveGame game rows cols changedRows transponed =
+	let solRows = solveGameByRow game rows
+	    trGame = transpose solRows
+	in solveGame trGame cols rows (findChangedCols game solRows) (not transponed)
 
 solveGameByRow:: [[Cell]]->[[Int]]->[[Cell]]
-solveGameByRow game rows = zipWith (\x y -> fst (trySolveRow x y)) game rows
+solveGameByRow game rows = zipWith (\x y -> trySolveRow x y) game rows
 
 convertGame :: [[Cell]]-> [[Bool]]
 convertGame game = map convertRow game
@@ -50,11 +47,32 @@ trySolveRow game rowGr = let refRow = createRow (length game)
                              firstSov = genFirst rowGr
                              refRow2 = trySolveRow2 game rowGr refRow (Just firstSov)
                              newRow = unknownToEmpty refRow2
-                             in  (newRow , (diff newRow game))
+                             in newRow
+
+-- porównanie dwóch tablic [[Cell]], wynik - indeksy zmienionych kolumn
+findChangedCols :: [[Cell]] -> [[Cell]] -> [Int]
+findChangedCols game1 game2 = getChangedIdx (diffGames game1 game2)
+
+diffGames :: [[Cell]] -> [[Cell]] -> [[Bool]]
+diffGames [] _ = []
+diffGames _ [] = []
+diffGames (g1:gs1) (g2:gs2) = (diff g1 g2):(diffGames gs1 gs2)
 
 diff _ [] = []
 diff [] _ = []
 diff (x:xs) (y:ys) = (x /= y):(diff xs ys)
+
+getChangedIdx :: [[Bool]] -> [Int]
+getChangedIdx [] = []
+getChangedIdx diffGame = elemIndices True (sumDiffGameCols diffGame)
+
+sumDiffGameCols :: [[Bool]] -> [Bool]
+sumDiffGameCols [] = []
+sumDiffGameCols (g:gs) = sumDiffGameCols2 g gs
+
+sumDiffGameCols2 :: [Bool] -> [[Bool]] -> [Bool]
+sumDiffGameCols2 game [] = game
+sumDiffGameCols2 g1 (g2:g2s) = sumDiffGameCols2 (zipWith (||) g1 g2) g2s
 
 unknownToEmpty [] = []
 unknownToEmpty (Unknown:list) = Empty:(unknownToEmpty list)
@@ -166,19 +184,14 @@ calcDropFrom2 (s:curSolRev) (rg:rowGrRev) rowSize = if s + rg <= rowSize then
 -- READ DATA FROM FILE
 
 readData :: IO ([[Int]], [[Int]])
-readData = catch (do fname <- getLine
-                     handle <- openFile fname ReadMode
-                     rowstr <- hGetLine handle
-                     colstr <- hGetLine handle
-                     let cols = (read colstr) :: [[Int]]
-                         rows = (read rowstr) :: [[Int]]
-                     hClose handle
-                     return (rows, cols)
-                  ) errorHandler
-                      where errorHandler e = if isDoesNotExistError e
-                            then do putStrLn ("Nie istnieje plik o podanej nazwie")
-                                    ioError e
-                            else ioError e
+readData = do fname <- getLine
+              handle <- openFile fname ReadMode
+              rowstr <- hGetLine handle
+              colstr <- hGetLine handle
+              let cols = (read colstr) :: [[Int]]
+                  rows = (read rowstr) :: [[Int]]
+              hClose handle
+              return (rows, cols)
 
 -- DRAW RESULT PICTURE
 
@@ -239,7 +252,9 @@ main = catch (do putStr "Podaj nazwe pliku: "
                ) errorHandler
                where errorHandler e =
                          if isDoesNotExistError e
-                             then putStrLn ("Nie istnieje ")
+                             then putStrLn ("Nie istnieje plik o podanej nazwie.")
+                         else if isEOFError e
+                             then putStrLn ("Brak pełnej informacji o łamigłówce.")
                          else return ()
 
 
