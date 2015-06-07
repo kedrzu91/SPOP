@@ -1,29 +1,37 @@
-
 import Control.Exception
 import System.IO
 import System.IO.Error
 import Data.List
 
--- SOLVE NONOGRAM
+-- ROZWIĄZYWANIE ŁAMIGŁÓWKI
 
 data Cell = Empty | Black | White | Unknown
                 deriving (Eq, Show)
 
+-- utworzenie tablicy pomocniczej
 createTable:: Int -> Int-> [[ Cell ]]
 createTable colN rowN = [ (createRow colN) | xs <-[1..rowN] ]
 createRow colN = [Empty | x<-[1..colN]]
 
+-- główna funkcja rozwiązująca łamigłówkę
 solvePuzzle :: ([[Int]], [[Int]]) -> [[Bool]]
 solvePuzzle x = convertGame (solvePuzzle2 x)
 
 solvePuzzle2 :: ([[Int]], [[Int]]) -> [[Cell]]
 solvePuzzle2 (rows, cols) = let game = createTable (length cols) (length rows)
-                                (solution, transponed) = solveGame game rows cols [True | x<-[1..(length rows)]] False
+                                game2 = transpose (solveGameByRow game rows)
+                                (solution, transponed) = solveGame game2 cols rows [True | x<-[1..(length cols)]] True
                             in if(transponed) then transpose solution
                                else solution
 
--- przyjmowane argumenty:
--- obecne rozwiązanie, dane wierszy, dane kolumn, informacja które kolumny zostały zmienione, informacja czy obrazek jest obrócony
+convertGame :: [[Cell]]-> [[Bool]]
+convertGame game = map convertRow game
+
+convertRow :: [Cell]-> [Bool]
+convertRow row = map (\x -> x == Black) row
+
+-- kolejne rozwiązania wierszy/kolumn, przyjmowane argumenty:
+--   obecne rozwiązanie, dane wierszy, dane kolumn, informacja które kolumny zostały zmienione, informacja czy obrazek jest obrócony
 solveGame :: [[Cell]] -> [[Int]] -> [[Int]] -> [Bool] -> Bool -> ([[Cell]], Bool)
 solveGame game _ _ [] transponed = (game, transponed)
 solveGame game rows cols changedRows transponed =
@@ -36,36 +44,24 @@ solveGame game rows cols changedRows transponed =
             trGame = transpose solRows
         in solveGame trGame cols rows (findChangedCols analyzedGame solution) (not transponed)
 
+-- wybór elementów listy na podstwie listy z wartościami typu Bool
 getElem :: [[a]] -> [Bool] -> [[a]]
 getElem _ [] = []
 getElem [] _ = []
 getElem (elem:elems) (idx:idxs) = if(idx == True) then elem:(getElem elems idxs)
     else getElem elems idxs
 
+-- łączenie wyniku pojedynczej iteracji z całym rozwiazaniem
 merge [] game _ = game
 merge (sol:sols) (game:games) (change:changes) =
     if (change == True) then sol:(merge sols games changes)
     else game:(merge (sol:sols) games changes)
 
-solveGameByRow:: [[Cell]]->[[Int]]->[[Cell]]
-solveGameByRow game rows = zipWith (\x y -> trySolveRow x y) game rows
-
-convertGame :: [[Cell]]-> [[Bool]]
-convertGame game = map convertRow game
-
-convertRow :: [Cell]-> [Bool]
-convertRow row = map (\x -> x == Black) row
-
-trySolveRow game rowGr = let refRow = createRow (length game)
-                             firstSov = genFirst rowGr
-                             refRow2 = trySolveRow2 game rowGr refRow (Just firstSov)
-                             newRow = unknownToEmpty refRow2
-                             in newRow
-
--- porównanie dwóch tablic [[Cell]], wynik - indeksy zmienionych kolumn
+-- porównanie dwóch tablic [[Cell]]
 findChangedCols :: [[Cell]] -> [[Cell]] -> [Bool]
 findChangedCols game1 game2 = sumDiffGameCols (diffGames game1 game2)
 
+-- znajdowanie różnic w tablicach (zmiana == True)
 diffGames :: [[Cell]] -> [[Cell]] -> [[Bool]]
 diffGames [] _ = []
 diffGames _ [] = []
@@ -83,10 +79,24 @@ sumDiffGameCols2 :: [Bool] -> [[Bool]] -> [Bool]
 sumDiffGameCols2 game [] = game
 sumDiffGameCols2 g1 (g2:g2s) = sumDiffGameCols2 (zipWith (||) g1 g2) g2s
 
+-- wyznaczanie rozwiazania dla podanych wierszy
+solveGameByRow:: [[Cell]]->[[Int]]->[[Cell]]
+solveGameByRow game rows = zipWith (\x y -> trySolveRow x y) game rows
+
+-- rozwiązanie pojedynczego wiersza, argumenty:
+--   stare rozwiązanie wiersza, dane wiersza
+trySolveRow game rowGr = let refRow = createRow (length game)
+                             firstSov = genFirst rowGr
+                             refRow2 = trySolveRow2 game rowGr refRow (Just firstSov)
+                             newRow = unknownToEmpty refRow2
+                             in newRow
+
 unknownToEmpty [] = []
 unknownToEmpty (Unknown:list) = Empty:(unknownToEmpty list)
 unknownToEmpty (x:list) = x:(unknownToEmpty list)
 
+-- argumenty:
+--   stare rozwiązanie wiersza, dane wiersza, wiersz pomocniczy, nowa kombinacja wiersza
 trySolveRow2 :: [Cell]-> [Int]->[Cell]-> Maybe [Int] -> [Cell]
 trySolveRow2  gameRow rowGr refRow Nothing = andRow gameRow refRow
 trySolveRow2  gameRow rowGr refRow (Just curSol) =
@@ -135,7 +145,7 @@ sumCell x Empty = x
 sumCell x y = if x == y then x else Unknown
 
 -- Generacja nastepnej solucji
-
+-- Solucja jest repezentowana jako tablica indeksów, od których zaczynają się kolejne zamalowane grupy
 genFirst::[Int] -> [Int]
 genFirst list = 1:(genFirst2 1 list)
 
@@ -190,7 +200,7 @@ calcDropFrom2 (s:curSolRev) (rg:rowGrRev) rowSize = if s + rg <= rowSize then
                                                             safeIncrement (calcDropFrom2 curSolRev rowGrRev (rowSize - rg - 1))
 
 
--- READ DATA FROM FILE
+-- WCZYTYWANIE DANYCH Z PLIKU
 
 readData :: IO ([[Int]], [[Int]])
 readData = do fname <- getLine
@@ -202,8 +212,9 @@ readData = do fname <- getLine
               hClose handle
               return (rows, cols)
 
--- DRAW RESULT PICTURE
+-- RYSOWANIE WYNIKU
 
+-- główna funkcja rysująca
 drawPicture :: [[Bool]] -> Int -> IO ()
 drawPicture c n = do putChar '+'
                      drawBorderLine n
@@ -212,7 +223,7 @@ drawPicture c n = do putChar '+'
                      drawBorderLine n
                      return ()
 
-
+-- rysowanie ramki
 drawBorderLine :: Int -> IO ()
 drawBorderLine 0 = do putStrLn "+"
                       return ()
@@ -221,7 +232,7 @@ drawBorderLine n = do putChar '-'
                       drawBorderLine (n-1)
                       return ()
 
-
+-- rysowanie zawartości
 drawContent :: [[Bool]] -> Int -> IO ()
 drawContent [] _ = return ()
 
@@ -229,7 +240,6 @@ drawContent (l:ls) n = do putChar '|'
                           drawLine l n
                           drawContent ls n
                           return ()
-
 
 drawLine :: [Bool] -> Int -> IO ()
 drawLine _ 0 = do putStrLn "|"
@@ -244,8 +254,7 @@ drawLine (b:bs) n = do if b == True then putChar 'x'
                        drawLine bs (n-1)
                        return ()
 
-
--- MAIN PROGRAM
+-- PROGRAM GŁÓWNY
 
 main :: IO ()
 main = catch (do putStr "Podaj nazwe pliku: "
@@ -264,6 +273,4 @@ main = catch (do putStr "Podaj nazwe pliku: "
                              then putStrLn ("Nie istnieje plik o podanej nazwie.")
                          else if isEOFError e
                              then putStrLn ("Brak pełnej informacji o łamigłówce.")
-                         else return ()
-
-
+                         else putStrLn ("Błąd programu.")
